@@ -8,7 +8,7 @@ var allowN = redis.NewScript(`
 -- this script has side-effects, so it requires replicate commands mode
 redis.replicate_commands()
 
-local rate_limit_key = KEYS[1]
+-- local rate_limit_key = KEYS[1]
 local burst = ARGV[1]
 local rate = ARGV[2]
 local period = ARGV[3]
@@ -29,12 +29,12 @@ local jan_1_2017 = 1483228800
 local now = redis.call("TIME")
 now = (now[1] - jan_1_2017) + (now[2] / 1000000)
 
-local tat = redis.call("GET", rate_limit_key)
+local tat = redis.call("GET", KEYS[1])
 
 if not tat then
-  tat = now
+    tat = now
 else
-  tat = tonumber(tat)
+    tat = tonumber(tat)
 end
 
 tat = math.max(tat, now)
@@ -46,29 +46,29 @@ local diff = now - allow_at
 local remaining = diff / emission_interval
 
 if remaining < 0 then
-  local reset_after = tat - now
-  local retry_after = diff * -1
-  return {
-    0, -- allowed
-    0, -- remaining
-    tostring(retry_after),
-    tostring(reset_after),
-  }
+    local reset_after = tat - now
+    local retry_after = diff * -1
+    return {
+        0, -- allowed
+        0, -- remaining
+        tostring(retry_after),
+        tostring(reset_after),
+    }
 end
 
 local reset_after = new_tat - now
 if reset_after > 0 then
-  redis.call("SET", rate_limit_key, new_tat, "EX", math.ceil(reset_after))
+    redis.call("SET", KEYS[1], new_tat, "EX", math.ceil(reset_after))
 end
 local retry_after = -1
-return {cost, remaining, tostring(retry_after), tostring(reset_after)}
+return { cost, remaining, tostring(retry_after), tostring(reset_after) }
 `)
 
 var allowAtMost = redis.NewScript(`
 -- this script has side-effects, so it requires replicate commands mode
 redis.replicate_commands()
 
-local rate_limit_key = KEYS[1]
+-- local rate_limit_key = KEYS[1]
 local burst = ARGV[1]
 local rate = ARGV[2]
 local period = ARGV[3]
@@ -88,12 +88,12 @@ local jan_1_2017 = 1483228800
 local now = redis.call("TIME")
 now = (now[1] - jan_1_2017) + (now[2] / 1000000)
 
-local tat = redis.call("GET", rate_limit_key)
+local tat = redis.call("GET", KEYS[1])
 
 if not tat then
-  tat = now
+    tat = now
 else
-  tat = tonumber(tat)
+    tat = tonumber(tat)
 end
 
 tat = math.max(tat, now)
@@ -102,21 +102,21 @@ local diff = now - (tat - burst_offset)
 local remaining = diff / emission_interval
 
 if remaining < 1 then
-  local reset_after = tat - now
-  local retry_after = emission_interval - diff
-  return {
-    0, -- allowed
-    0, -- remaining
-    tostring(retry_after),
-    tostring(reset_after),
-  }
+    local reset_after = tat - now
+    local retry_after = emission_interval - diff
+    return {
+        0, -- allowed
+        0, -- remaining
+        tostring(retry_after),
+        tostring(reset_after),
+    }
 end
 
 if remaining < cost then
-  cost = remaining
-  remaining = 0
+    cost = remaining
+    remaining = 0
 else
-  remaining = remaining - cost
+    remaining = remaining - cost
 end
 
 local increment = emission_interval * cost
@@ -124,13 +124,13 @@ local new_tat = tat + increment
 
 local reset_after = new_tat - now
 if reset_after > 0 then
-  redis.call("SET", rate_limit_key, new_tat, "EX", math.ceil(reset_after))
+    redis.call("SET", KEYS[1], new_tat, "EX", math.ceil(reset_after))
 end
 
 return {
-  cost,
-  remaining,
-  tostring(-1),
-  tostring(reset_after),
+    cost,
+    remaining,
+    tostring(-1),
+    tostring(reset_after),
 }
 `)
